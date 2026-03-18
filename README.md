@@ -44,15 +44,15 @@ Messages on the `consumethis` queue are plain UTF-8 text. Azure Storage Queue do
 
 Each dequeued message is inserted into the `dbo.transactions` table with a freshly generated GUID as the primary key.
 
-| Column           | Type           | Description                                              |
-|------------------|----------------|----------------------------------------------------------|
-| `TransactionId`  | GUID (PK)      | Unique identifier generated at ingestion time            |
-| `AccountId`      | string (≤100)  | Account identifier from `$.Id` in the queue message      |
-| `Source`         | string (≤255)  | Source file/system from `$.source` in the queue message  |
-| `Message`        | string         | Transaction description from `$.Message`                 |
-| `EventTs`        | datetime?      | Nullable; not populated by the current source — reserved for a future timestamp field |
-| `OriginalJson`   | string         | The raw JSON payload as received from the queue          |
-| `InsertionTime`  | datetime       | UTC timestamp of when the record was inserted            |
+| Column             | Type           | Description                                              |
+|--------------------|----------------|----------------------------------------------------------|
+| `transaction_id`   | GUID (PK)      | Unique identifier generated at ingestion time            |
+| `account_id`       | string (≤100)  | Account identifier from `$.Id` in the queue message      |
+| `Source`           | string (≤255)  | Source file/system from `$.source` in the queue message  |
+| `Message`          | string         | Transaction description from `$.Message`                 |
+| `event_ts`         | datetime?      | Nullable; not populated by the current source — reserved for a future timestamp field |
+| `original_json`    | string         | The raw JSON payload as received from the queue          |
+| `insertion_time`   | datetime       | UTC timestamp of when the record was inserted            |
 
 ## Project Structure
 

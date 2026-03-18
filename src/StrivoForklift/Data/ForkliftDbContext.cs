@@ -20,11 +20,12 @@ public class ForkliftDbContext : DbContext
         {
             entity.ToTable("transactions", "dbo");
             entity.HasKey(e => e.TransactionId);
-            entity.Property(e => e.TransactionId).IsRequired();
-            entity.Property(e => e.AccountId).HasMaxLength(100);
+            entity.Property(e => e.TransactionId).HasColumnName("transaction_id").IsRequired();
+            entity.Property(e => e.AccountId).HasColumnName("account_id").HasMaxLength(100);
             entity.Property(e => e.Source).HasMaxLength(255);
-            entity.Property(e => e.InsertionTime)
-                  .IsRequired();
+            entity.Property(e => e.EventTs).HasColumnName("event_ts");
+            entity.Property(e => e.InsertionTime).HasColumnName("insertion_time").IsRequired();
+            entity.Property(e => e.OriginalJson).HasColumnName("original_json");
             entity.HasIndex(e => e.AccountId)
                   .HasDatabaseName("IX_transactions_account_id");
         });
