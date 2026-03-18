@@ -73,8 +73,9 @@ public class ForkliftQueueFunctionTests
         Assert.Equal("fake_bank_transactions_1000.csv", record.Source);
         Assert.Equal("Direct debit SEK 97.77 (Internet subscription)", record.Message);
         Assert.Equal(rawMessage, record.OriginalJson);
-        // Debug log for successful write must have been emitted
-        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Debug);
+        // Information log for successful write must have been emitted
+        Assert.Contains(logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Successfully wrote"));
     }
 
     [Fact]
@@ -112,6 +113,26 @@ public class ForkliftQueueFunctionTests
             .Where(e => e.Level == LogLevel.Information && e.Message.StartsWith("Dequeued message"))
             .ToList();
         Assert.Equal(2, detailLogs.Count);
+    }
+
+    [Fact]
+    public async Task Run_ValidMessage_LogsDbAttemptAndSuccess()
+    {
+        // Arrange
+        var logger = new CapturingLogger<ForkliftQueueFunction>();
+        var function = new ForkliftQueueFunction(CreateInMemoryDbContext(), logger);
+        var rawMessage = BuildRawMessage("fake_bank_transactions_1000.csv", "tx0001",
+            "Direct debit SEK 97.77 (Internet subscription)");
+
+        // Act
+        await function.Run(rawMessage);
+
+        // Assert – an "attempting" entry is logged before the write
+        Assert.Contains(logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Attempting to write transaction"));
+        // Assert – a "success" entry is logged after the write
+        Assert.Contains(logger.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Successfully wrote transaction"));
     }
 
     [Fact]

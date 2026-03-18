@@ -51,6 +51,10 @@ public class ForkliftQueueFunction
             "Dequeued message — TransactionId: {TransactionId}, AccountId: {AccountId}, Source: {Source}, Message: {Message}",
             transactionId, payload.Id, payload.Source, payload.Message);
 
+        _logger.LogInformation(
+            "Attempting to write transaction to database. TransactionId: {TransactionId}, AccountId: {AccountId}",
+            transactionId, payload.Id);
+
         try
         {
             _dbContext.Transactions.Add(new Transaction
@@ -64,7 +68,7 @@ public class ForkliftQueueFunction
             });
             await _dbContext.SaveChangesAsync();
 
-            _logger.LogDebug(
+            _logger.LogInformation(
                 "Successfully wrote transaction to database. TransactionId: {TransactionId}, AccountId: {AccountId}",
                 transactionId, payload.Id);
         }
