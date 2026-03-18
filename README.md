@@ -1,6 +1,6 @@
 # StrivoForklift
 
-Azure Function App that reads forklift events from an Azure Storage Queue and persists them in a database. When a newer event (with a more recent timestamp) arrives for an existing forklift ID, the stored record is updated; older or duplicate messages are ignored.
+Azure Function App that reads bank transaction events from an Azure Storage Queue and persists them in a database. Each message is inserted as a new transaction record; a GUID is generated at ingestion time as the primary key.
 
 ## Architecture
 
@@ -23,27 +23,33 @@ Messages on the `consumethis` queue are plain UTF-8 text. Azure Storage Queue do
 
 ```json
 {
-  "id": "forklift-1",
-  "timestamp": "2024-06-01T08:30:00Z",
-  "status": "active"
+  "source": "fake_bank_transactions_1000.csv",
+  "Id": "tx0001",
+  "Message": "Direct debit SEK 97.77 (Internet subscription)"
 }
 ```
 
-| Field       | Type             | Description                                    |
-|-------------|------------------|------------------------------------------------|
-| `id`        | string (required)| Unique identifier for the forklift/entity      |
-| `timestamp` | ISO-8601 string  | Event time – used to determine message recency |
-| `status`    | string (optional)| Operational status (e.g. `active`, `idle`)     |
+| Field      | Type             | Description                                                  |
+|------------|------------------|--------------------------------------------------------------|
+| `source`   | string (optional)| Source file or system that originated the transaction        |
+| `Id`       | string (optional)| Account identifier for the transaction (e.g. `tx0001`)      |
+| `Message`  | string (optional)| Human-readable transaction description                       |
 
 > **Note:** If the queue may contain non-JSON messages, handle the `JsonException` in the function and route invalid messages to the poison queue (Azure Functions does this automatically after 5 failed delivery attempts).
 
-## Upsert Logic
+## Database Model
 
-| Scenario                            | Action                        |
-|-------------------------------------|-------------------------------|
-| No existing record for `id`         | **Insert** new record         |
-| Incoming timestamp **>** stored     | **Update** the existing record|
-| Incoming timestamp **≤** stored     | **Skip** (no change)          |
+Each dequeued message is inserted into the `dbo.transactions` table with a freshly generated GUID as the primary key.
+
+| Column           | Type           | Description                                              |
+|------------------|----------------|----------------------------------------------------------|
+| `TransactionId`  | GUID (PK)      | Unique identifier generated at ingestion time            |
+| `AccountId`      | string (≤100)  | Account identifier from `$.Id` in the queue message      |
+| `Source`         | string (≤255)  | Source file/system from `$.source` in the queue message  |
+| `Message`        | string         | Transaction description from `$.Message`                 |
+| `EventTs`        | datetime?      | Nullable; not populated by the current source — reserved for a future timestamp field |
+| `OriginalJson`   | string         | The raw JSON payload as received from the queue          |
+| `InsertionTime`  | datetime       | UTC timestamp of when the record was inserted            |
 
 ## Project Structure
 

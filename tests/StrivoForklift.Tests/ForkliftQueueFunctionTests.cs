@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using StrivoForklift.Data;
 using Xunit;
 
 namespace StrivoForklift.Tests;
@@ -24,12 +26,21 @@ public class ForkliftQueueFunctionTests
     private static string BuildRawMessage(string source, string accountId, string message)
         => $"{{\"source\":\"{source}\",\"Id\":\"{accountId}\",\"Message\":\"{message}\"}}";
 
+    /// <summary>Creates a fresh in-memory EF Core database context for each test.</summary>
+    private static ForkliftDbContext CreateInMemoryDbContext()
+    {
+        var options = new DbContextOptionsBuilder<ForkliftDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options;
+        return new ForkliftDbContext(options);
+    }
+
     [Fact]
     public async Task Run_ValidMessage_LogsDequeueDetails()
     {
         // Arrange
         var logger = new CapturingLogger<ForkliftQueueFunction>();
-        var function = new ForkliftQueueFunction(logger);
+        var function = new ForkliftQueueFunction(CreateInMemoryDbContext(), logger);
         var rawMessage = BuildRawMessage("fake_bank_transactions_1000.csv", "tx0001",
             "Direct debit SEK 97.77 (Internet subscription)");
 
@@ -44,11 +55,34 @@ public class ForkliftQueueFunctionTests
     }
 
     [Fact]
+    public async Task Run_ValidMessage_WritesRecordToDatabase()
+    {
+        // Arrange
+        var db = CreateInMemoryDbContext();
+        var logger = new CapturingLogger<ForkliftQueueFunction>();
+        var function = new ForkliftQueueFunction(db, logger);
+        var rawMessage = BuildRawMessage("fake_bank_transactions_1000.csv", "tx0001",
+            "Direct debit SEK 97.77 (Internet subscription)");
+
+        // Act
+        await function.Run(rawMessage);
+
+        // Assert – exactly one transaction record inserted with correct fields
+        var record = Assert.Single(db.Transactions.ToList());
+        Assert.Equal("tx0001", record.AccountId);
+        Assert.Equal("fake_bank_transactions_1000.csv", record.Source);
+        Assert.Equal("Direct debit SEK 97.77 (Internet subscription)", record.Message);
+        Assert.Equal(rawMessage, record.OriginalJson);
+        // Debug log for successful write must have been emitted
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Debug);
+    }
+
+    [Fact]
     public async Task Run_MultipleDistinctMessages_EachLogged()
     {
         // Arrange
         var logger = new CapturingLogger<ForkliftQueueFunction>();
-        var function = new ForkliftQueueFunction(logger);
+        var function = new ForkliftQueueFunction(CreateInMemoryDbContext(), logger);
 
         // Act
         await function.Run(BuildRawMessage("test.csv", "tx0001", "Payment A"));
@@ -64,9 +98,9 @@ public class ForkliftQueueFunctionTests
     [Fact]
     public async Task Run_SameMessageTwice_BothLogged()
     {
-        // Arrange – with DB ops disabled, the same message is simply logged twice; each invocation gets a unique TransactionId
+        // Arrange – each invocation gets a unique TransactionId (GUID PK), so two rows are inserted
         var logger = new CapturingLogger<ForkliftQueueFunction>();
-        var function = new ForkliftQueueFunction(logger);
+        var function = new ForkliftQueueFunction(CreateInMemoryDbContext(), logger);
         var rawMessage = BuildRawMessage("test.csv", "tx0001", "Payment A");
 
         // Act – send the same message twice
@@ -85,7 +119,7 @@ public class ForkliftQueueFunctionTests
     {
         // Arrange
         var logger = new CapturingLogger<ForkliftQueueFunction>();
-        var function = new ForkliftQueueFunction(logger);
+        var function = new ForkliftQueueFunction(CreateInMemoryDbContext(), logger);
 
         // Act – plain text, not valid JSON
         await function.Run("not-valid-json");
@@ -101,7 +135,7 @@ public class ForkliftQueueFunctionTests
     {
         // Arrange – message format matching actual queue output from the problem statement
         var logger = new CapturingLogger<ForkliftQueueFunction>();
-        var function = new ForkliftQueueFunction(logger);
+        var function = new ForkliftQueueFunction(CreateInMemoryDbContext(), logger);
         const string rawMessage = "{\"source\":\"fake_bank_transactions_1000.csv\",\"Id\":\"tx0494\",\"Message\":\"Refund SEK 4773.50 from SJ\"}";
 
         // Act

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-// using StrivoForklift.Data;
+using StrivoForklift.Data;
 using StrivoForklift.Models;
 
 namespace StrivoForklift;
@@ -11,17 +11,15 @@ namespace StrivoForklift;
 /// Each message is a JSON payload with source, Id, and Message fields, e.g.:
 ///   {"source":"fake_bank_transactions_1000.csv","Id":"tx0001","Message":"..."}
 /// A transaction GUID is generated at ingestion time and stored as the primary key.
-/// NOTE: Database operations are temporarily commented out to isolate and verify
-/// queue ingestion. Re-enable when database connectivity is confirmed.
 /// </summary>
 public class ForkliftQueueFunction
 {
-    // private readonly ForkliftDbContext _dbContext;
+    private readonly ForkliftDbContext _dbContext;
     private readonly ILogger<ForkliftQueueFunction> _logger;
 
-    public ForkliftQueueFunction(/* ForkliftDbContext dbContext, */ ILogger<ForkliftQueueFunction> logger)
+    public ForkliftQueueFunction(ForkliftDbContext dbContext, ILogger<ForkliftQueueFunction> logger)
     {
-        // _dbContext = dbContext;
+        _dbContext = dbContext;
         _logger = logger;
     }
 
@@ -53,28 +51,29 @@ public class ForkliftQueueFunction
             "Dequeued message — TransactionId: {TransactionId}, AccountId: {AccountId}, Source: {Source}, Message: {Message}",
             transactionId, payload.Id, payload.Source, payload.Message);
 
-        // ── Database operations commented out for queue-ingestion diagnostics ──────────
-        // var existing = await _dbContext.Transactions.FindAsync(transactionId);
-        // if (existing is not null)
-        // {
-        //     _logger.LogInformation("Skipped duplicate transaction Id: {TransactionId}", transactionId);
-        //     return;
-        // }
-        //
-        // _dbContext.Transactions.Add(new Transaction
-        // {
-        //     TransactionId = transactionId,
-        //     AccountId = payload.Id,
-        //     Source = payload.Source,
-        //     Message = payload.Message,
-        //     OriginalJson = rawMessage,
-        //     InsertionTime = DateTime.UtcNow
-        // });
-        // await _dbContext.SaveChangesAsync();
-        //
-        // _logger.LogInformation("Inserted transaction Id: {TransactionId}", transactionId);
-        // ──────────────────────────────────────────────────────────────────────────────
+        try
+        {
+            _dbContext.Transactions.Add(new Transaction
+            {
+                TransactionId = transactionId,
+                AccountId = payload.Id,
+                Source = payload.Source,
+                Message = payload.Message,
+                OriginalJson = rawMessage,
+                InsertionTime = DateTime.UtcNow
+            });
+            await _dbContext.SaveChangesAsync();
 
-        await Task.CompletedTask;
+            _logger.LogDebug(
+                "Successfully wrote transaction to database. TransactionId: {TransactionId}, AccountId: {AccountId}",
+                transactionId, payload.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex,
+                "Failed to write transaction to database. TransactionId: {TransactionId}, AccountId: {AccountId}",
+                transactionId, payload.Id);
+            throw;
+        }
     }
 }
