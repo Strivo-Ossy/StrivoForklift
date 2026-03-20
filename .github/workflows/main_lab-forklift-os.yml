@@ -1,34 +1,27 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/azure/functions-action
 # More GitHub Actions for Azure: https://github.com/Azure/actions
-
 name: Build and deploy dotnet core project to Azure Function App - lab-forklift-os
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 env:
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: '.' # set this to the path to your web app project, defaults to the repository root
-  DOTNET_VERSION: '8.0' # set this to the dotnet version to use
-
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'src/StrivoForklift'
+  DOTNET_VERSION: '8.0'
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       id-token: write #This is required for requesting the JWT
       contents: read #This is required for actions/checkout
-
     steps:
       - name: 'Checkout GitHub Action'
         uses: actions/checkout@v4
-
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
         uses: actions/setup-dotnet@v1
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
-
       - name: 'Resolve Project Dependencies Using Dotnet'
         shell: bash
         run: |
@@ -42,7 +35,6 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_9FB0EF8CBB0E40998AA129524D4A476B }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6565A8EAC57749E9AC82229480F75D50 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_DA0094E21A724855820A26F3FD0C392A }}
-
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
         id: fa
@@ -50,4 +42,3 @@ jobs:
           app-name: 'lab-forklift-os'
           slot-name: 'Production'
           package: '${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}/output'
-          
